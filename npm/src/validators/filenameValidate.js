@@ -1,0 +1,114 @@
+import { DatasetIssues } from '../issues/datasetIssues.js';
+import { SEP } from '../deps/path.js';
+const CHECKS = [
+    checkRules,
+];
+export async function filenameValidate(schema, context) {
+    for (const check of CHECKS) {
+        await check(schema, context);
+    }
+    return Promise.resolve();
+}
+export function isAtRoot(context) {
+    if (context.file.path.split(SEP).length !== 2) {
+        return false;
+    }
+    return true;
+}
+const ruleChecks = [
+    extensionMismatch,
+    keywordCheck
+];
+export function checkRules(schema, context) {
+    if (context.filenameRules.length === 1) {
+        for (const check of ruleChecks) {
+            check(context.filenameRules[0], schema, context);
+        }
+    }
+    else {
+        const ogIssues = context.issues;
+        const noIssues = [];
+        const someIssues = [];
+        for (const path of context.filenameRules) {
+            const tempIssues = new DatasetIssues();
+            context.issues = tempIssues;
+            for (const check of ruleChecks) {
+                check(path, schema, context);
+            }
+            tempIssues.size
+                ? someIssues.push([path, tempIssues])
+                : noIssues.push([path, tempIssues]);
+        }
+        if (noIssues.length) {
+            context.issues = ogIssues;
+            context.filenameRules = [noIssues[0][0]];
+        }
+        else if (someIssues.length) {
+            // What would we want to do with each rules issues? Add all?
+            context.issues = ogIssues;
+            context.issues.addSchemaIssue('AllFilenameRulesHaveIssues', [
+                {
+                    ...context.file,
+                    evidence: `Rules that matched with issues: ${someIssues
+                        .map((x) => x[0])
+                        .join(', ')}`,
+                },
+            ]);
+        }
+    }
+    return Promise.resolve();
+}
+export function extensionMismatch(path, schema, context) {
+    const rule = schema[path];
+    if (Array.isArray(rule.extensions) &&
+        !rule.extensions.includes(context.extension)) {
+        context.issues.addSchemaIssue('ExtensionMismatch', [
+            { ...context.file, evidence: `Rule: ${path}` },
+        ]);
+    }
+}
+/*
+* Function to evaluate filename for keyword formatting and log warnings/errors
+* about non-canonical keyword usage
+* params:
+* path: specific string location within the schema model
+* schema: schema model object
+* context: context objectfor this particular file within the file tree
+*/
+export function keywordCheck(path, schema, context) {
+    const rule = schema[path];
+    if ("usesKeywords" in rule && rule.usesKeywords) {
+        if ('fileRegex' in rule) {
+            const fileRegex = new RegExp(rule.fileRegex);
+            const regexMatch = context.file.name.match(fileRegex);
+            // If only a fraction of the filename or the whole filename is invalid according to regex
+            // within the schema model, log error
+            if ((regexMatch && regexMatch[0] !== context.file.name) || !regexMatch) {
+                context.issues.addSchemaIssue("KeywordFormattingError", [context.file]);
+            }
+        }
+        //if any of the keywords are not part of the official list within the schema model
+        if (!Object.keys(context.keywords).every((keyword) => keyword in schema['meta.context.context.properties.keywords.properties'])) {
+            //will be delivered either as warning or error depending on schema model configuration.
+            context.issues.addSchemaIssue("UnofficialKeywordWarning", [context.file]);
+        }
+    }
+}
+/* Checks the rulesRecord object to see which rules were satisfied (or at least detected)
+ * and which weren't. Since there are no files in question to list for the files object,
+ * it's necessary to use unique error codes for each missing type of element.
+ * Error codes, severity levels, and error messages (reasons) are collated with each rule
+ * in the schema model
+ */
+export function checkMissingRules(schema, rulesRecord, issues) {
+    Object.keys(rulesRecord)
+        .filter((key) => { return rulesRecord[key] === false; })
+        .map((key) => {
+        const node = schema[key];
+        issues.add({
+            key: node.code,
+            reason: node.reason,
+            severity: node.level
+        });
+    });
+}

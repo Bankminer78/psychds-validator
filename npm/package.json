@@ -1,0 +1,32 @@
+{
+  "name": "PsychDSValidator",
+  "description": "Your package.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/psych-ds/psychds-validator.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/username/repo/issues"
+  },
+  "module": "./esm/psychds-validator.js",
+  "exports": {
+    ".": {
+      "import": "./esm/psychds-validator.js"
+    }
+  },
+  "scripts": {
+    "start": "node src/psychds-validator.js",
+    "test": "node test_runner.js"
+  },
+  "dependencies": {
+    "jsonld": "*",
+    "@deno/shim-deno": "~0.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0",
+    "picocolors": "^1.0.0"
+  },
+  "_generatedBy": "dnt@dev"
+}
